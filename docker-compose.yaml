@@ -1,0 +1,12 @@
+services:
+  fin_assist_db:
+    container_name: fin_assist_db
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_pwd
+      POSTGRES_DB: fin_db
+    ports:
+      - "5000:5432"
+    volumes:
+      - /mnt/external_drive/fin_assist_data:/var/lib/postgresql/data
