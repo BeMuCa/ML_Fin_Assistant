@@ -79,3 +79,15 @@ if __name__ == "__main__":
     pipeline = FinanceETLPipeline(tickers, period,load_to_db=True)
     pipeline.run()
     print("ETL Pipeline completed successfully.")
+    
+    
+    # Different models trained on different time intervalls 
+    # 
+    # Dependency between trained time intervalls and how the labels should be set?
+    
+    # Maybe a 1h is not as effective in predicting 1 week in advance
+    
+    
+    # End goal: 
+    # Layer different models trained on different Time intervalls
+      
