@@ -5,7 +5,7 @@ This function handles the database connection and queries.
     
 import psycopg2
 from psycopg2 import sql
-
+import pandas as pd
 
 class DBHandler:
     """
@@ -123,8 +123,15 @@ class DBHandler:
                 cursor.execute(
                     f"""
                     INSERT INTO {stock_name}.stock_movement (
-                        timestamp, volatility, volume, daily_closing,
-                        daily_opening, daily_high, daily_low, gap, gap_percentage
+                        timestamp,
+                        volatility,
+                        volume,
+                        daily_closing,
+                        daily_opening,
+                        daily_high,
+                        daily_low,
+                        gap,
+                        gap_percentage
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -223,8 +230,86 @@ class DBHandler:
             self.conn.rollback()
 
 
+    def combine_indicators(self, stock_name):
+        """
+        Combine all indicators into a single table.
+        
+        :param conn: Connection object.
+        :param stock_name: Name of the stock schema.
+        """
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        e.timestamp,
+                        e.ema_50,
+                        e.ema_200,
+                        e.ema_9,
+                        s.sma_50,
+                        s.sma_200,
+                        s.sma_9,
+                        m.macd_line,
+                        m.macd_signal,
+                        m.macd_hist,
+                        mm.volatility,
+                        mm.volume,
+                        mm.daily_closing,
+                        mm.daily_opening,
+                        mm.daily_high,
+                        mm.daily_low,
+                        mm.gap,
+                        mm.gap_percentage
+                    FROM {stock_name}.stock_movement AS mm
+                    JOIN {stock_name}.sma AS s ON mm.timestamp = s.timestamp
+                    JOIN {stock_name}.macd AS m ON s.timestamp = m.timestamp
+                    JOIN {stock_name}.ema AS e ON m.timestamp = e.timestamp
+                    ORDER BY e.timestamp DESC;
+                    """
+                )
+                self.conn.commit()
+                results = cursor.fetchall() # returned tuples 
+                columns = [ 
+                    "timestamp", "ema_50", "ema_200", "ema_9",
+                    "sma_50", "sma_200", "sma_9",
+                    "macd_line", "macd_signal", "macd_hist",
+                    "volatility", "volume", "daily_closing", "daily_opening",
+                    "daily_high", "daily_low", "gap", "gap_percentage"
+                ]
+                
+                return pd.DataFrame(results, columns=columns)
+        except psycopg2.Error as e:
+            print(f"Error combining indicators for {stock_name}: {e}")
+            raise
 
+    def add_bull_bear_label(self, df): # POSSIBLE ADJUSTMENTS HERE 
+        """
+        Depending on the trajectory of the next day daily close, add label bullish/bearish
 
+        Bull if the day after tomorrow is higher than now.
+        
+        """
+        df = df.sort_values("Datetime", ascending=False).reset_index(drop=True)
+        labels = []
+
+        for i in range(len(df)):
+            current_close = df.loc[i, "daily_closing"]
+
+            # Check if there are 4 future rows to compare
+            if i + 5 < len(df):
+                future_closes = df.loc[i+5, "daily_closing"].values # MIGHT ADD THE PERCENTAGE DIFFERENCE
+                                                                    # >1% ? depends on stock
+                if (future_closes > current_close):
+                    labels.append(1)
+                else:
+                    labels.append(-1)
+            else:
+                labels.append(None)  # Not enough future data
+
+        df["label"] = labels
+        return df
+        
+        
 
 if __name__ == "__main__":
     # Example usage

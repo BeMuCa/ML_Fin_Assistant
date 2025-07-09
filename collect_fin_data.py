@@ -140,11 +140,11 @@ if __name__ == "__main__":
     ticker = "AMD"
     FDC = FinanceDataCollector(ticker)
     
-    a=FDC.ticker_data
-    print(len(a))
-    b=FDC.calculate_ema(a)
-    spark = SparkSession.builder.appName("FinanceETL").getOrCreate()
-    print(spark.createDataFrame(b))
+    #a=FDC.ticker_data
+    #print(len(a))
+    #b=FDC.calculate_ema(a)
+    #spark = SparkSession.builder.appName("FinanceETL").getOrCreate()
+    #print(spark.createDataFrame(b))
     
     # ml kriegt jetzige daten
     # label ist die markt movement im nächsten frame

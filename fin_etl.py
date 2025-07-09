@@ -6,7 +6,7 @@ from pyspark.sql import SparkSession
 
 from collect_fin_data import FinanceDataCollector
 from db_connector.db_handler import DBHandler
-from indicators.simple_indicators import calc_sma, calc_ema, calc_market_move, calc_macd
+from ml_pipeline import Pipeline
 
 import os
 import sys
@@ -16,28 +16,66 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
 
 class FinanceETLPipeline:
-    def __init__(self, tickers, period="730d"):
-        self.spark = SparkSession.builder.appName("FinanceETL").getOrCreate()
-        self.collector = FinanceDataCollector(tickers, period)
-        self.db = DBHandler(dbname="your_db", user="user", password="pw")
+    def __init__(self, tickers, period="730d", load_to_db=True):
+        self.tickers: list = tickers
+        self.period = period
+        self.load_to_db = load_to_db
+        self.Pipeline = Pipeline
+        self.spark = SparkSession.builder\
+            .appName("FinanceETL")\
+            .config("spark.jars", "B:/1_Berk_Coding/Jars/postgresql-42.7.3.jar") \
+            .getOrCreate()
+        self.collector = FinanceDataCollector(self.tickers, self.period)
+        self.db = DBHandler()
 
     def run(self):
-        self.collector.collect_ticker_data()
+        for ticker in self.tickers: # iterate over each ticker
+            print(f"Processing ticker: {ticker} ...")
 
-        for ticker, df in self.collector.ticker_data.items():
-            df_sma = calc_sma(df)
-            df_ema = calc_ema(df)
-            df_market = calc_market_move(df)
-            df_macd = calc_macd(df)
+            data = self.collector.ticker_data
+            df_sma = self.collector.calculate_sma(ticker, data)
+            df_ema = self.collector.calculate_ema(ticker, data)
+            df_market = self.collector.calculate_movement_metrics(ticker, data)
+            df_macd = self.collector.calculate_macd(ticker, data)
 
-            # Optional: convert to Spark DataFrames
+            # Convert to Spark DataFrames
             spark_sma = self.spark.createDataFrame(df_sma)
             spark_ema = self.spark.createDataFrame(df_ema)
             spark_market = self.spark.createDataFrame(df_market)
             spark_macd = self.spark.createDataFrame(df_macd)
 
             # Load to DB
-            self.db.load_sma(ticker, spark_sma)
-            self.db.load_ema(ticker, spark_ema)
-            self.db.load_market_move(ticker, spark_market)
-            self.db.load_macd(ticker, spark_macd)
+            if self.load_to_db:
+                self.db.load_sma(ticker, spark_sma)
+                self.db.load_ema(ticker, spark_ema)
+                self.db.load_market_move(ticker, spark_market)
+                self.db.load_macd(ticker, spark_macd)
+                
+            labeled_data = self.db.add_bull_bear_label(self.db.combine_indicators(ticker))
+            
+            
+            # ML Pipeline 
+            self.Pipeline.setup_pipeline()
+            self.Pipeline.split_data(labeled_data)
+            self.Pipeline.train_model()
+            
+            # Evaluation
+            self.Pipeline.evaluate_model()
+            
+            # Saving the Model
+            self.Pipeline.save_model(ticker=ticker)
+            
+            
+            
+            # Finish the pipeline
+            self.spark.stop()
+            self.db.close_connection()
+            
+
+
+if __name__ == "__main__":
+    tickers = ["AMD", "GOOGL", "MSFT"]  # Example tickers
+    period = "730d"  # 2 years of data - max?
+    pipeline = FinanceETLPipeline(tickers, period,load_to_db=True)
+    pipeline.run()
+    print("ETL Pipeline completed successfully.")

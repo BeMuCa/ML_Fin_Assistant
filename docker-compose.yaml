@@ -10,3 +10,9 @@ services:
       - "5000:5432"
     volumes:
       - /mnt/external_drive/fin_assist_data:/var/lib/postgresql/data
+
+  airflow:
+    container_name: fin_assist_airflow
+    image: apache/airflow:latest
+    environment:
+      
