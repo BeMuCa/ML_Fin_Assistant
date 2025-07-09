@@ -70,9 +70,13 @@ class DBHandler:
                 cursor.execute(f"""
                     CREATE TABLE IF NOT EXISTS {stock_name}.macd (
                         timestamp TIMESTAMP PRIMARY KEY DEFAULT NOW(),
-                        macd_line FLOAT NOT NULL
+                        macd_line FLOAT NOT NULL,
+                        macd_signal FLOAT NOT NULL,
+                        macd_hist FLOAT NOT NULL
                     );
                 """)
+                
+                # Market Movement Table
                 cursor.execute(f"""
                     CREATE TABLE IF NOT EXISTS {stock_name}.stock_movement (
                         timestamp TIMESTAMP PRIMARY KEY DEFAULT NOW(),
@@ -86,6 +90,16 @@ class DBHandler:
                         gap_percentage FLOAT NOT NULL
                     );
                 """)
+                
+                # ML Model Performance Table
+                cursor.execute(f"""
+                    CREATE TABLE amd.track_ml_results (
+                        id BIGSERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP,
+                        predicted INTEGER,
+                        actual INTEGER);
+                """)
+                               
                 self.conn.commit()
                 print("Table created successfully.")
         except psycopg2.Error as e:
@@ -198,9 +212,11 @@ class DBHandler:
                     f"""
                     INSERT INTO {stock_name}.macd (
                         timestamp,
-                        macd_line
-                    ) VALUES (%s, %s);""",
-                    (data["timestamp"], data["macd_line"])
+                        macd_line,
+                        macd_signal,
+                        macd_hist
+                    ) VALUES (%s, %s, %s, %s);""",
+                    (data["timestamp"], data["macd_line"], data["macd_signal"], data["macd_hist"])
                 )
         except psycopg2.Error as e:
             print(f"Error inserting data into {stock_name}.macd: {e}")
